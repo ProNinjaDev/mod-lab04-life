@@ -4,9 +4,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Text.Json; 
+using System.IO;
 
 namespace cli_life
 {
+    public class SettingsJSON
+    {
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public int CellSize { get; set; }
+        public double LiveDensity { get; set; }
+    }
+
     public class Cell
     {
         public bool IsAlive;
@@ -91,11 +101,14 @@ namespace cli_life
         static Board board;
         static private void Reset()
         {
+            string json = File.ReadAllText("settings.json");
+            SettingsJSON settings = JsonSerializer.Deserialize<SettingsJSON>(json);
+
             board = new Board(
-                width: 50,
-                height: 20,
-                cellSize: 1,
-                liveDensity: 0.5);
+                width: settings.Width,
+                height: settings.Height,
+                cellSize: settings.CellSize,
+                liveDensity: settings.LiveDensity);
         }
         static void Render()
         {
