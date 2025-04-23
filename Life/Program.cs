@@ -101,6 +101,28 @@ namespace cli_life
         static Board board;
         static private void Reset()
         {
+            string loadFileName = "BoardCondition.txt";
+
+            if (File.Exists(loadFileName)) {
+                string[] lines = File.ReadAllLines(loadFileName);
+                if (lines.Length == 0 || lines[0].Length == 0) {
+                    Console.WriteLine("Empty load file");
+                }
+                else {
+                    int height = lines.Length;
+                    int width = lines[0].Length;
+
+                    board = new Board(width, height, 1, 0);
+
+                    for (int row = 0; row < height; row++) {
+                        for (int column = 0; column < width; column++) {
+                            board.Cells[column, row].IsAlive = lines[row][column] == '*' ? true : false;
+                        }
+                    }
+                    return;
+                }
+            }
+
             string json = File.ReadAllText("settings.json");
             SettingsJSON settings = JsonSerializer.Deserialize<SettingsJSON>(json);
 
@@ -129,6 +151,17 @@ namespace cli_life
                 Console.Write('\n');
             }
         }
+
+        static void SaveBoardCondition(string filename) {
+            StreamWriter streamWriter = new StreamWriter(filename);
+            for (int row = 0; row < board.Rows; row++) {
+                for (int column = 0; column < board.Columns; column++) {
+                    streamWriter.Write(board.Cells[column, row].IsAlive ? '*' : ' ');
+                }
+                streamWriter.WriteLine();
+            }
+            streamWriter.Close();
+        }
         static void Main(string[] args)
         {
             Reset();
@@ -137,6 +170,12 @@ namespace cli_life
                 Console.Clear();
                 Render();
                 board.Advance();
+                if (Console.KeyAvailable){
+                    ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+                    if(keyInfo.Key == ConsoleKey.S) {
+                        SaveBoardCondition("BoardCondition.txt");
+                    }
+                }
                 Thread.Sleep(1000);
             }
         }
