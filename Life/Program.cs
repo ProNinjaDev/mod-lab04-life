@@ -99,38 +99,95 @@ namespace cli_life
     class Program
     {
         static Board board;
-        static private void Reset()
+        static private void Reset(string colonyFile = null)
         {
-            string loadFileName = "BoardCondition.txt";
+            string json = File.ReadAllText("settings.json");
+            SettingsJSON settings = JsonSerializer.Deserialize<SettingsJSON>(json);
 
-            if (File.Exists(loadFileName)) {
-                string[] lines = File.ReadAllLines(loadFileName);
-                if (lines.Length == 0 || lines[0].Length == 0) {
-                    Console.WriteLine("Empty load file");
-                }
-                else {
-                    int height = lines.Length;
-                    int width = lines[0].Length;
-
-                    board = new Board(width, height, 1, 0);
-
-                    for (int row = 0; row < height; row++) {
-                        for (int column = 0; column < width; column++) {
-                            board.Cells[column, row].IsAlive = lines[row][column] == '*' ? true : false;
-                        }
-                    }
+            if (!string.IsNullOrEmpty(colonyFile)) {
+                bool isLoaded = LoadColony(colonyFile, settings.Width, settings.Height);
+                if(isLoaded) {
                     return;
                 }
             }
 
-            string json = File.ReadAllText("settings.json");
-            SettingsJSON settings = JsonSerializer.Deserialize<SettingsJSON>(json);
+            string loadFileName = "BoardCondition.txt";
+            if (File.Exists(loadFileName)) {
+                bool isFullBoardLoaded = LoadFullBoard(loadFileName);
+
+                if(isFullBoardLoaded) {
+                    return;
+                }
+            }
 
             board = new Board(
                 width: settings.Width,
                 height: settings.Height,
                 cellSize: settings.CellSize,
                 liveDensity: settings.LiveDensity);
+        }
+
+        static private bool LoadFullBoard(string filename) {
+            string[] lines = File.ReadAllLines(filename);
+
+            if (lines.Length == 0 || lines[0].Length == 0) {
+                Console.WriteLine("Empty load file");
+                return false;
+            }
+
+            int height = lines.Length;
+            int width = lines[0].Length;
+
+            board = new Board(width, height, 1, 0);
+            for (int row = 0; row < height; row++) {
+                for (int column = 0; column < width; column++) {
+                    board.Cells[column, row].IsAlive = lines[row][column] == '*' ? true : false;
+                }
+            }
+            return true;
+        }
+        static private bool LoadColony (string colonyFile, int boardWidth, int boardHeight) {
+            if (!File.Exists(colonyFile)) {
+                return false;
+            }
+
+            string[] lines = File.ReadAllLines(colonyFile);
+
+            if (lines.Length == 0 || lines[0].Length == 0) {
+                Console.WriteLine("Empty load file");
+                return false;
+            }
+            
+            int colonyHeight = lines.Length;
+            int colonyWidth = lines[0].Length;
+            for (int i = 1; i < colonyHeight; i++)
+            {
+                if (lines[i].Length != colonyWidth)
+                {
+                    return false;
+                }
+            }
+            if(colonyHeight > boardHeight || colonyWidth > boardWidth) {
+                return false;
+            }
+
+            int offsetCenterX = (boardWidth - colonyWidth) / 2;
+            int offsetCenterY = (boardHeight - colonyHeight) / 2;
+            board = new Board(boardWidth, boardHeight, 1, 0);
+
+            for (int y = 0; y < colonyHeight; y++)
+            {
+                for (int x = 0; x < colonyWidth; x++)
+                {
+                    if (lines[y][x] == '*')
+                    {
+                        int targetX = offsetCenterX + x;
+                        int targetY = offsetCenterY + y;
+                        board.Cells[targetX, targetY].IsAlive = true;
+                    }
+                }
+            }
+            return true;
         }
         static void Render()
         {
@@ -164,7 +221,13 @@ namespace cli_life
         }
         static void Main(string[] args)
         {
-            Reset();
+            string colonyFile = null;
+
+            if(args.Length > 0) {
+                colonyFile = args[0];
+            }
+
+            Reset(colonyFile);
             while(true)
             {
                 Console.Clear();
