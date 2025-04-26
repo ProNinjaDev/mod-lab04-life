@@ -161,10 +161,150 @@ namespace cli_life
 
             return clusterCnt;
         }
+
+        public Dictionary<string, int> AllocatorClusters()
+        {
+            var clusterCounts = new Dictionary<string, int>();
+            bool[,] visited = new bool[Columns, Rows];
+
+            for (int x = 0; x < Columns; x++)
+            {
+                for (int y = 0; y < Rows; y++)
+                {
+                    if (Cells[x, y].IsAlive && !visited[x, y])
+                    {
+                        var currentClusterCells = new List<(int, int)>();
+                        Queue<(int, int)> queue = new Queue<(int, int)>();
+
+                        queue.Enqueue((x, y));
+                        visited[x, y] = true;
+                        currentClusterCells.Add((x, y));
+
+                        while (queue.Count > 0)
+                        {
+                            var (currentX, currentY) = queue.Dequeue();
+
+                            int xL = (currentX > 0) ? currentX - 1 : Columns - 1;
+                            int xR = (currentX < Columns - 1) ? currentX + 1 : 0;
+                            int yT = (currentY > 0) ? currentY - 1 : Rows - 1;
+                            int yB = (currentY < Rows - 1) ? currentY + 1 : 0;
+
+                            int[,] neighborCoords = {
+                                { xL, yT }, { currentX, yT }, { xR, yT },
+                                { xL, currentY },            { xR, currentY },
+                                { xL, yB }, { currentX, yB }, { xR, yB }
+                            };
+
+                            for (int i = 0; i < 8; i++)
+                            {
+                                int nx = neighborCoords[i, 0];
+                                int ny = neighborCoords[i, 1];
+
+                                if (Cells[nx, ny].IsAlive && !visited[nx, ny])
+                                {
+                                    visited[nx, ny] = true;
+                                    queue.Enqueue((nx, ny));
+                                    currentClusterCells.Add((nx, ny));
+                                }
+                            }
+                        }
+
+                        HashSet<(int, int)> normalizedShape = Program.NormalizeShape(currentClusterCells);
+                        string patternName = Program.ClassifyShape(normalizedShape);
+
+                        if (clusterCounts.ContainsKey(patternName))
+                        {
+                            clusterCounts[patternName]++;
+                        }
+                        else
+                        {
+                            clusterCounts.Add(patternName, 1);
+                        }
+                    }
+                }
+            }
+
+            return clusterCounts;
+        }
     }
     class Program
     {
         static Board board;
+
+        private static readonly Dictionary<string, HashSet<(int, int)>> SamplesShapes;
+
+        static Program(){
+            SamplesShapes = InitializeSamples();
+        }
+
+        private static Dictionary<string, HashSet<(int, int)>> InitializeSamples() {
+            var library = new Dictionary<string, HashSet<(int, int)>>();
+
+            var samplesFiles = new Dictionary<string, string> {
+                { "block.txt", "Block" },
+                { "glider.txt", "Glider" },
+                { "boat.txt", "Boat" },
+                { "hive.txt", "Hive" },
+                { "ship.txt", "Ship" },
+                { "snake.txt", "Snake" }
+            };
+
+            foreach(var sampleFile in samplesFiles) {
+                string filename = sampleFile.Key;
+                string sampleName = sampleFile.Value;
+
+                HashSet<(int, int)> normalizedShape = LoadNormalizeShape(filename);
+
+                if (normalizedShape.Count > 0) {
+                    library.Add(sampleName, normalizedShape);
+                }
+            }
+
+            return library;
+        }
+
+        private static HashSet<(int, int)> LoadNormalizeShape(string filename) {
+            if(!File.Exists(filename)) {
+                return new HashSet<(int, int)>();
+            }
+
+            string[] lines = File.ReadAllLines(filename);
+            if (lines.Length == 0) {
+                return new HashSet<(int, int)>();
+            }
+
+            var cells = new List<(int x, int y)>();
+            for (int y = 0; y < lines.Length; y++)
+            {
+                for (int x = 0; x < lines[y].Length; x++)
+                {
+                    if (lines[y][x] == '*')
+                    {
+                        cells.Add((x, y));
+                    }
+                }
+            }
+
+            return NormalizeShape(cells);
+        }
+
+        internal static string ClassifyShape(HashSet<(int, int)> normalizedShape) {
+            foreach(var sampleLibraryShape in SamplesShapes) {
+                string sampleName = sampleLibraryShape.Key;
+                HashSet<(int, int)> sampleShape = sampleLibraryShape.Value;
+
+                if (normalizedShape.Count != sampleShape.Count)
+                {
+                    continue;
+                }
+
+                if (normalizedShape.SetEquals(sampleShape))
+                {
+                    return sampleName;
+                }
+            }
+            return "Undefined";
+        }
         static private void Reset(string colonyFile = null)
         {
             string json = File.ReadAllText("settings.json");
@@ -275,11 +415,22 @@ namespace cli_life
             }
 
             int livingCells = board.CntLivingCells();
-            int clusters = board.CntClusters();
+            //int clusters = board.CntClusters();
+            Dictionary<string, int> clusterInfo = board.AllocatorClusters();
+
+            int clusters = 0;
+            foreach (var cnt in clusterInfo.Values) {
+                clusters += cnt;
+            }
 
             Console.WriteLine("+-+-+-+-+-+-+-+-+-+-+-+-+");
             Console.WriteLine($"Count living cells: {livingCells}");
             Console.WriteLine($"Count clusters: {clusters}");
+
+            foreach (var cluster in clusterInfo) {
+                Console.WriteLine($"    {cluster.Key}: {cluster.Value}");
+            }
+
             Console.WriteLine("+-+-+-+-+-+-+-+-+-+-+-+-+");
         }
 
@@ -293,6 +444,30 @@ namespace cli_life
             }
             streamWriter.Close();
         }
+        internal static HashSet<(int, int)> NormalizeShape(List<(int x, int y)> clusterCells)
+        {
+            if (clusterCells == null || clusterCells.Count == 0)
+            {
+                return new HashSet<(int, int)>();
+            }
+
+            int minX = clusterCells[0].x;
+            int minY = clusterCells[0].y;
+            foreach (var cell in clusterCells)
+            {
+                if (cell.x < minX) minX = cell.x;
+                if (cell.y < minY) minY = cell.y;
+            }
+
+            HashSet<(int, int)> normalizedShape = new HashSet<(int, int)>();
+            foreach (var cell in clusterCells)
+            {
+                normalizedShape.Add((cell.x - minX, cell.y - minY));
+            }
+
+            return normalizedShape;
+        }
+
         static void Main(string[] args)
         {
             string colonyFile = null;
