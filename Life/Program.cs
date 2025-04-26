@@ -95,6 +95,72 @@ namespace cli_life
                 }
             }
         }
+
+        public int CntLivingCells(){
+            int cnt = 0;
+            for (int x = 0; x < Columns; x++)
+            {
+                for (int y = 0; y < Rows; y++)
+                {
+                    if (Cells[x, y].IsAlive)
+                    {
+                        cnt++;
+                    }
+                }
+            }
+            return cnt;
+        }
+
+        public int CntClusters()
+        {
+            int clusterCnt = 0;
+            bool[,] visited = new bool[Columns, Rows];
+
+            for (int x = 0; x < Columns; x++)
+            {
+                for (int y = 0; y < Rows; y++)
+                {
+                    if (Cells[x, y].IsAlive && !visited[x, y])
+                    {
+                        clusterCnt++;
+                        Queue<(int, int)> queue = new Queue<(int, int)>();
+
+                        queue.Enqueue((x, y));
+                        visited[x, y] = true;
+
+                        while (queue.Count > 0)
+                        {
+                            var (currentX, currentY) = queue.Dequeue();
+
+                            int xL = (currentX > 0) ? currentX - 1 : Columns - 1;
+                            int xR = (currentX < Columns - 1) ? currentX + 1 : 0;
+                            int yT = (currentY > 0) ? currentY - 1 : Rows - 1;
+                            int yB = (currentY < Rows - 1) ? currentY + 1 : 0;
+
+                            int[,] neighborCoords = {
+                                { xL, yT }, { currentX, yT }, { xR, yT },
+                                { xL, currentY }, { xR, currentY },
+                                { xL, yB }, { currentX, yB }, { xR, yB }
+                            };
+
+                            for (int i = 0; i < 8; i++)
+                            {
+                                int nx = neighborCoords[i, 0];
+                                int ny = neighborCoords[i, 1];
+
+                                if (Cells[nx, ny].IsAlive && !visited[nx, ny])
+                                {
+                                    visited[nx, ny] = true;
+                                    queue.Enqueue((nx, ny));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return clusterCnt;
+        }
     }
     class Program
     {
@@ -207,6 +273,14 @@ namespace cli_life
                 }
                 Console.Write('\n');
             }
+
+            int livingCells = board.CntLivingCells();
+            int clusters = board.CntClusters();
+
+            Console.WriteLine("+-+-+-+-+-+-+-+-+-+-+-+-+");
+            Console.WriteLine($"Count living cells: {livingCells}");
+            Console.WriteLine($"Count clusters: {clusters}");
+            Console.WriteLine("+-+-+-+-+-+-+-+-+-+-+-+-+");
         }
 
         static void SaveBoardCondition(string filename) {
