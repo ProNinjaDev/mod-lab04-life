@@ -233,6 +233,11 @@ namespace cli_life
 
         private static readonly Dictionary<string, HashSet<(int, int)>> SamplesShapes;
 
+        private const int STAGNATIONCOUNT = 10;
+        private static Queue<int> historyLivingCells = new Queue<int>();
+        private static int generationCount = 0;
+        private static bool stagnationAchieved = false;
+
         static Program(){
             SamplesShapes = InitializeSamples();
         }
@@ -424,6 +429,7 @@ namespace cli_life
             }
 
             Console.WriteLine("+-+-+-+-+-+-+-+-+-+-+-+-+");
+            Console.WriteLine($"Generation: {generationCount}");
             Console.WriteLine($"Count living cells: {livingCells}");
             Console.WriteLine($"Count clusters: {clusters}");
 
@@ -477,11 +483,45 @@ namespace cli_life
             }
 
             Reset(colonyFile);
+
+            generationCount = 0;
+            stagnationAchieved = false;
+            historyLivingCells.Clear();
             while(true)
             {
+                generationCount++;
                 Console.Clear();
                 Render();
                 board.Advance();
+
+                int currentLivingCells = board.CntLivingCells();
+
+                historyLivingCells.Enqueue(currentLivingCells);
+                if (historyLivingCells.Count > STAGNATIONCOUNT)
+                {
+                    historyLivingCells.Dequeue();
+                }
+
+                if (!stagnationAchieved && historyLivingCells.Count == STAGNATIONCOUNT)
+                {
+                    bool isStable = true;
+                    int firstCount = historyLivingCells.Peek();
+                    foreach (int countInHistory in historyLivingCells)
+                    {
+                        if (countInHistory != firstCount)
+                        {
+                            isStable = false;
+                            break;
+                        }
+                    }
+
+                    if (isStable)
+                    {
+                         Console.WriteLine($"Stagnation achieved on a generation {generationCount}");
+                        stagnationAchieved = true;
+                        break;
+                    }
+                }
                 if (Console.KeyAvailable){
                     ConsoleKeyInfo keyInfo = Console.ReadKey(true);
                     if(keyInfo.Key == ConsoleKey.S) {
