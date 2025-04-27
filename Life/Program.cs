@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Text.Json; 
 using System.IO;
+using ScottPlot;
 
 namespace cli_life
 {
@@ -310,32 +311,35 @@ namespace cli_life
             }
             return "Undefined";
         }
-        static private void Reset(string colonyFile = null)
+        static private void Reset(string colonyFile = null, bool forceRandMode = false, double customDensity = 0.5)
         {
             string json = File.ReadAllText("settings.json");
             SettingsJSON settings = JsonSerializer.Deserialize<SettingsJSON>(json);
 
-            if (!string.IsNullOrEmpty(colonyFile)) {
-                bool isLoaded = LoadColony(colonyFile, settings.Width, settings.Height);
-                if(isLoaded) {
-                    return;
+            if (!forceRandMode) {
+                if (!string.IsNullOrEmpty(colonyFile)) {
+                    bool isLoaded = LoadColony(colonyFile, settings.Width, settings.Height);
+                    if(isLoaded) {
+                        return;
+                    }
+                }
+
+                string loadFileName = "BoardCondition.txt";
+                if (File.Exists(loadFileName)) {
+                    bool isFullBoardLoaded = LoadFullBoard(loadFileName);
+
+                    if(isFullBoardLoaded) {
+                        return;
+                    }
                 }
             }
-
-            string loadFileName = "BoardCondition.txt";
-            if (File.Exists(loadFileName)) {
-                bool isFullBoardLoaded = LoadFullBoard(loadFileName);
-
-                if(isFullBoardLoaded) {
-                    return;
-                }
-            }
+            double densityToUse = forceRandMode ? customDensity : settings.LiveDensity;
 
             board = new Board(
                 width: settings.Width,
                 height: settings.Height,
                 cellSize: settings.CellSize,
-                liveDensity: settings.LiveDensity);
+                liveDensity: densityToUse);
         }
 
         static private bool LoadFullBoard(string filename) {
@@ -476,60 +480,153 @@ namespace cli_life
 
         static void Main(string[] args)
         {
-            string colonyFile = null;
-
-            if(args.Length > 0) {
-                colonyFile = args[0];
+            if (args.Contains("plotmode")) {
+                Console.WriteLine("!!!PLOT MODE!!!");
+                RunPlotMode();
+                Console.WriteLine("PLOT MODE end");
             }
 
-            Reset(colonyFile);
+            else {
 
-            generationCount = 0;
-            stagnationAchieved = false;
-            historyLivingCells.Clear();
-            while(true)
-            {
-                generationCount++;
-                Console.Clear();
-                Render();
-                board.Advance();
+                string colonyFile = null;
 
-                int currentLivingCells = board.CntLivingCells();
-
-                historyLivingCells.Enqueue(currentLivingCells);
-                if (historyLivingCells.Count > STAGNATIONCOUNT)
-                {
-                    historyLivingCells.Dequeue();
+                if(args.Length > 0) {
+                    colonyFile = args[0];
                 }
 
-                if (!stagnationAchieved && historyLivingCells.Count == STAGNATIONCOUNT)
+                Reset(colonyFile);
+
+                generationCount = 0;
+                stagnationAchieved = false;
+                historyLivingCells.Clear();
+                while(true)
                 {
-                    bool isStable = true;
-                    int firstCount = historyLivingCells.Peek();
-                    foreach (int countInHistory in historyLivingCells)
+                    generationCount++;
+                    Console.Clear();
+                    Render();
+                    board.Advance();
+
+                    int currentLivingCells = board.CntLivingCells();
+
+                    historyLivingCells.Enqueue(currentLivingCells);
+                    if (historyLivingCells.Count > STAGNATIONCOUNT)
                     {
-                        if (countInHistory != firstCount)
+                        historyLivingCells.Dequeue();
+                    }
+
+                    if (!stagnationAchieved && historyLivingCells.Count == STAGNATIONCOUNT)
+                    {
+                        bool isStable = true;
+                        int firstCount = historyLivingCells.Peek();
+                        foreach (int countInHistory in historyLivingCells)
                         {
-                            isStable = false;
+                            if (countInHistory != firstCount)
+                            {
+                                isStable = false;
+                                break;
+                            }
+                        }
+
+                        if (isStable)
+                        {
+                            Console.WriteLine($"Stagnation achieved on a generation {generationCount}");
+                            stagnationAchieved = true;
+                            break;
+                        }
+                    }
+                    if (Console.KeyAvailable){
+                        ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+                        if(keyInfo.Key == ConsoleKey.S) {
+                            SaveBoardCondition("BoardCondition.txt");
+                        }
+                    }
+                    Thread.Sleep(1000);
+                }
+            }
+        }
+
+        static void RunPlotMode() {
+            double[] densitiesToTest = { 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 };
+            int maxGenerations = 200;
+            string dataName = "data.txt";
+            string plotName = "plot.png";
+
+            var simData = new List<(double density, int generation, int population)>();
+
+            foreach (var density in densitiesToTest) {
+                Reset(forceRandMode: true, customDensity: density);
+                Queue<int> localHistory = new Queue<int>();
+                bool localStagnation = false;
+
+                for (int gen = 1; gen <= maxGenerations; gen++) {
+                    int  currentPopulation = board.CntLivingCells();
+                    simData.Add((density, gen, currentPopulation));
+
+                    localHistory.Enqueue(currentPopulation);
+                    if (localHistory.Count > STAGNATIONCOUNT) {
+                        localHistory.Dequeue();
+                    }
+
+                    if (!localStagnation && localHistory.Count == STAGNATIONCOUNT)
+                    {
+                        bool isStable = true;
+                        int firstCount = localHistory.Peek();
+                        foreach (int countInHistory in localHistory)
+                        {
+                            if (countInHistory != firstCount)
+                            {
+                                isStable = false;
+                                break;
+                            }
+                        }
+
+                        if (isStable)
+                        {
+                            localStagnation = true;
+                            Console.WriteLine($"Stagnation achieved on a generation {gen}");
                             break;
                         }
                     }
 
-                    if (isStable)
-                    {
-                         Console.WriteLine($"Stagnation achieved on a generation {generationCount}");
-                        stagnationAchieved = true;
-                        break;
-                    }
+                    board.Advance();
+
                 }
-                if (Console.KeyAvailable){
-                    ConsoleKeyInfo keyInfo = Console.ReadKey(true);
-                    if(keyInfo.Key == ConsoleKey.S) {
-                        SaveBoardCondition("BoardCondition.txt");
-                    }
+                if (!localStagnation) {
+                    Console.WriteLine("Gen limit has been reached");
                 }
-                Thread.Sleep(1000);
             }
+
+            StreamWriter writer = new StreamWriter(dataName);
+
+            writer.WriteLine("Generation Density Population");
+            foreach (var dataPoint in simData) {
+                writer.WriteLine($"{dataPoint.generation} {dataPoint.density:F2} {dataPoint.population}");
+            }
+            writer.Close();
+
+            Plot plt = new Plot();
+
+            plt.Title("Number of living cells");
+            plt.XLabel("Gen number");
+            plt.YLabel("Cell count");
+
+            var groupedData = simData.GroupBy(d => d.density);
+
+            foreach (var group in groupedData) {
+                double density = group.Key;
+
+                double[] generations = group.Select(d => (double)d.generation).ToArray();
+                double[] populations = group.Select(d => (double)d.population).ToArray();
+
+                var scatter = plt.Add.Scatter(generations, populations);
+                scatter.Label = $"{density:F1}";
+                scatter.MarkerSize = 0;
+                scatter.LineWidth = 1.5f;
+            }
+
+            plt.Legend.IsVisible = true;
+
+            plt.SavePng(plotName, 1200, 800);
         }
     }
 }
