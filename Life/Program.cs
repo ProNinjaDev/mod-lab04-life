@@ -228,7 +228,7 @@ namespace cli_life
             return clusterCounts;
         }
     }
-    class Program
+    public class Program
     {
         static Board board;
 
@@ -294,7 +294,7 @@ namespace cli_life
             return NormalizeShape(cells);
         }
 
-        internal static string ClassifyShape(HashSet<(int, int)> normalizedShape) {
+        public static string ClassifyShape(HashSet<(int, int)> normalizedShape) {
             foreach(var sampleLibraryShape in SamplesShapes) {
                 string sampleName = sampleLibraryShape.Key;
                 HashSet<(int, int)> sampleShape = sampleLibraryShape.Value;
@@ -454,7 +454,7 @@ namespace cli_life
             }
             streamWriter.Close();
         }
-        internal static HashSet<(int, int)> NormalizeShape(List<(int x, int y)> clusterCells)
+        public static HashSet<(int, int)> NormalizeShape(List<(int x, int y)> clusterCells)
         {
             if (clusterCells == null || clusterCells.Count == 0)
             {
